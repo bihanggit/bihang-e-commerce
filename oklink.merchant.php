@@ -27,10 +27,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 $nzshpcrt_gateways[$num] = array(
   'name'                   => 'Oklink',
-  'api_version'            => 1.0,
-  // 'image'                  => WPSC_URL . '/images/coinbase.png',
+  'api_version'            => 2.0,
   'class_name'             => 'wpsc_merchant_oklink',
-// TODO 'has_recurring_billing' => true,
   'wp_admin_cannot_cancel' => true,
   'display_name'           => 'Bitcoin',
   'requirements'           => array(
@@ -61,12 +59,6 @@ class wpsc_merchant_oklink extends wpsc_merchant {
   // Called on gateway execution (payment logic)
   function submit() {
 
-    require_once(dirname(__FILE__) . "/oklink/Oklink.php");
-
-    $api_key = get_option("oklink_wpe_api_key");
-    $api_secret = get_option("oklink_wpe_api_secret");
-    $client = Oklink::withApiKey($api_key, $api_secret);
-
     $callback_secret = get_option("oklink_wpe_callbacksecret");
     if($callback_secret == false) {
       $callback_secret = sha1(openssl_random_pseudo_bytes(20));
@@ -80,17 +72,26 @@ class wpsc_merchant_oklink extends wpsc_merchant {
     $return_url = add_query_arg( 'wpsc_oklink_return', true, $return_url );
     $cancel_url = add_query_arg( 'cancelled', true, $return_url );
 
+    if ( !in_array($this->cart_data['store_currency'],array('USD','BTC','CNY')) ){
+        $_SESSION['WpscGatewayErrorMessage'] = 'only support USD/CNY/BTC';
+        wp_redirect(get_option( 'shopping_cart_url' ));
+        exit();
+    }
     $params = array (
-      'name'           => 'Your Order',
-      'price'          => $this->cart_data['total_price'],
-      'price_currency' => $this->cart_data['store_currency'],
+      'name'               => "Your Order {$this->cart_data['session_id']}",
+      'price'              => $this->cart_data['total_price'],
+      'price_currency'     => $this->cart_data['store_currency'],
       'callback_url'       => $callback_url,
-      // 'custom'             => $this->cart_data['session_id'],
+      'custom'             => $this->cart_data['session_id'],
       'success_url'        => $return_url,
-      // 'cancel_url'         => $cancel_url
     );
 
     try {
+      require_once(dirname(__FILE__) . "/oklink/Oklink.php");
+
+      $api_key = get_option("oklink_wpe_api_key");
+      $api_secret = get_option("oklink_wpe_api_secret");
+      $client = Oklink::withApiKey($api_key, $api_secret);      
       $code = $client->buttonsButton($params)->button->id;
     } catch (Exception $e) {
       $msg = $e->getMessage();
@@ -98,18 +99,24 @@ class wpsc_merchant_oklink extends wpsc_merchant {
       exit();
     }
 
-    wp_redirect(Base::WEB_BASE."merchant/mPayOrderStemp1.do?buttonid=$code");
+    wp_redirect(OklinkBase::WEB_BASE."merchant/mPayOrderStemp1.do?buttonid=$code");
     exit();
   }
 
   function parse_gateway_notification() {
     $callback_secret = get_option("oklink_wpe_callbacksecret");
 
-    if ( $callback_secret != false && $callback_secret == $_REQUEST['callback_secret'] ) {
+    require_once(dirname(__FILE__) . "/oklink/Oklink.php");
+
+    $api_key = get_option("oklink_wpe_api_key");
+    $api_secret = get_option("oklink_wpe_api_secret");
+    $client = Oklink::withApiKey($api_key, $api_secret);
+
+    if ( $callback_secret != false && $callback_secret == $_REQUEST['callback_secret'] && $client->checkCallback()) {
       $post_body = json_decode(file_get_contents("php://input"));
-      if (isset ($post_body->order)) {
-        $this->oklink_order = $post_body->order;
-        $this->session_id     = $this->oklink_order->custom;
+      if (isset ($post_body)) {
+        $this->oklink_order = $post_body;
+        $this->session_id   = $this->oklink_order->custom;
       } else {
         exit( "oklink Unrecognized Callback");
       }

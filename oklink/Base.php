@@ -81,5 +81,10 @@ class OklinkBase
     {
         return $this->_rpc->request("PUT", $path, $params);
     }
-
+    
+    public function checkCallback(){
+        $signature  = $_SERVER["HTTP_SIGNATURE"];
+        $post       = file_get_contents('php://input');
+        return $signature == hash_hmac("sha256", $post, $this->_authentication->getData()->apiKeySecret);  
+    }
  }
