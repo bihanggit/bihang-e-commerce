@@ -26,9 +26,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 $nzshpcrt_gateways[$num] = array(
-  'name'                   => 'Oklink',
+  'name'                   => 'Bihang',
   'api_version'            => 2.0,
-  'class_name'             => 'wpsc_merchant_oklink',
+  'class_name'             => 'wpsc_merchant_bihang',
   'wp_admin_cannot_cancel' => true,
   'display_name'           => 'Bitcoin',
   'requirements'           => array(
@@ -37,39 +37,39 @@ $nzshpcrt_gateways[$num] = array(
                                  /// for modules that may not be present, like curl
                                 'extra_modules' => array('curl', 'openssl')
                               ),
-  'internalname'           => 'wpsc_merchant_oklink',
-  'form'                   => 'form_oklink_wpsc',
-  'submit_function'        => 'submit_oklink_wpsc'
+  'internalname'           => 'wpsc_merchant_bihang',
+  'form'                   => 'form_bihang_wpsc',
+  'submit_function'        => 'submit_bihang_wpsc'
 );
 
 /**
-  * WP eCommerce oklink Merchant Class
+  * WP eCommerce bihang Merchant Class
   *
-  * This is the oklink merchant class, it extends the base merchant class
+  * This is the bihang merchant class, it extends the base merchant class
 */
-class wpsc_merchant_oklink extends wpsc_merchant {
+class wpsc_merchant_bihang extends wpsc_merchant {
 
-  var $oklink_order = null;
+  var $bihang_order = null;
 
   function __construct( $purchase_id = null, $is_receiving = false ) {
-    $this->name = 'oklink';
+    $this->name = 'bihang';
     parent::__construct( $purchase_id, $is_receiving );
   }
 
   // Called on gateway execution (payment logic)
   function submit() {
 
-    $callback_secret = get_option("oklink_wpe_callbacksecret");
+    $callback_secret = get_option("bihang_wpe_callbacksecret");
     if($callback_secret == false) {
       $callback_secret = sha1(openssl_random_pseudo_bytes(20));
-      update_option("oklink_wpe_callbacksecret", $callback_secret);
+      update_option("bihang_wpe_callbacksecret", $callback_secret);
     }
     $callback_url = $this->cart_data['notification_url'];
-    $callback_url = add_query_arg('gateway', 'wpsc_merchant_oklink', $callback_url);
+    $callback_url = add_query_arg('gateway', 'wpsc_merchant_bihang', $callback_url);
     $callback_url = add_query_arg('callback_secret', $callback_secret, $callback_url);
 
     $return_url = add_query_arg( 'sessionid', $this->cart_data['session_id'], $this->cart_data['transaction_results_url'] );
-    $return_url = add_query_arg( 'wpsc_oklink_return', true, $return_url );
+    $return_url = add_query_arg( 'wpsc_bihang_return', true, $return_url );
     $cancel_url = add_query_arg( 'cancelled', true, $return_url );
 
     if ( !in_array($this->cart_data['store_currency'],array('USD','BTC','CNY')) ){
@@ -87,48 +87,48 @@ class wpsc_merchant_oklink extends wpsc_merchant {
     );
 
     try {
-      require_once(dirname(__FILE__) . "/oklink/Oklink.php");
+      require_once(dirname(__FILE__) . "/bihang/Bihang.php");
 
-      $api_key = get_option("oklink_wpe_api_key");
-      $api_secret = get_option("oklink_wpe_api_secret");
-      $client = Oklink::withApiKey($api_key, $api_secret);      
+      $api_key = get_option("bihang_wpe_api_key");
+      $api_secret = get_option("bihang_wpe_api_secret");
+      $client = Bihang::withApiKey($api_key, $api_secret);      
       $code = $client->buttonsButton($params)->button->id;
     } catch (Exception $e) {
       $msg = $e->getMessage();
-      error_log ("There was an error creating a oklink checkout page: $msg. Make sure you've connected a merchant account in Oklink settings.");
+      error_log ("There was an error creating a bihang checkout page: $msg. Make sure you've connected a merchant account in Bihang settings.");
       exit();
     }
 
-    wp_redirect(OklinkBase::WEB_BASE."merchant/mPayOrderStemp1.do?buttonid=$code");
+    wp_redirect(BihangBase::WEB_BASE."merchant/mPayOrderStemp1.do?buttonid=$code");
     exit();
   }
 
   function parse_gateway_notification() {
-    $callback_secret = get_option("oklink_wpe_callbacksecret");
+    $callback_secret = get_option("bihang_wpe_callbacksecret");
 
-    require_once(dirname(__FILE__) . "/oklink/Oklink.php");
+    require_once(dirname(__FILE__) . "/bihang/Bihang.php");
 
-    $api_key = get_option("oklink_wpe_api_key");
-    $api_secret = get_option("oklink_wpe_api_secret");
-    $client = Oklink::withApiKey($api_key, $api_secret);
+    $api_key = get_option("bihang_wpe_api_key");
+    $api_secret = get_option("bihang_wpe_api_secret");
+    $client = Bihang::withApiKey($api_key, $api_secret);
 
     if ( $callback_secret != false && $callback_secret == $_REQUEST['callback_secret'] && $client->checkCallback()) {
       $post_body = json_decode(file_get_contents("php://input"));
       if (isset ($post_body)) {
-        $this->oklink_order = $post_body;
-        $this->session_id   = $this->oklink_order->custom;
+        $this->bihang_order = $post_body;
+        $this->session_id   = $this->bihang_order->custom;
       } else {
-        exit( "oklink Unrecognized Callback");
+        exit( "bihang Unrecognized Callback");
       }
     } else {
-      exit( "oklink Callback Failure" );
+      exit( "bihang Callback Failure" );
     }
   }
 
   function process_gateway_notification()  {
     $status = 1;
 
-    switch ( strtolower( $this->oklink_order->status ) ) {
+    switch ( strtolower( $this->bihang_order->status ) ) {
       case 'completed':
         $status = WPSC_Purchase_Log::ACCEPTED_PAYMENT;
         break;
@@ -138,16 +138,16 @@ class wpsc_merchant_oklink extends wpsc_merchant {
     }
 
     if ( $status > 1 ) {
-      $this->set_transaction_details( $this->oklink_order->id, $status );
+      $this->set_transaction_details( $this->bihang_order->id, $status );
     }
   }
 }
 
 // Returns a form for the admin section
-function form_oklink_wpsc() {
+function form_bihang_wpsc() {
 
-  $apiKey = get_option("oklink_wpe_api_key", "");
-  $apiSecret = get_option("oklink_wpe_api_secret", "");
+  $apiKey = get_option("bihang_wpe_api_key", "");
+  $apiSecret = get_option("bihang_wpe_api_secret", "");
 
   $apiKey = htmlentities($apiKey, ENT_QUOTES);
   $apiSecret = htmlentities($apiSecret, ENT_QUOTES);
@@ -155,41 +155,41 @@ function form_oklink_wpsc() {
   <tr>
     <td>Merchant Account</td>
     <td>
-      If you don't have an API Key, please generate one <a href='https://oklink.com/settings/api' target='_blank'>here</a> with the 'user' and 'merchant' permissions.
+      If you don't have an API Key, please generate one <a href='https://bihang.com/settings/api' target='_blank'>here</a> with the 'user' and 'merchant' permissions.
         </td>
   </tr>";
   
   $content .= "<tr>
     <td>API Key</td>
-    <td><input type='text' name='oklink_wpe_api_key' value='$apiKey' /></td>
+    <td><input type='text' name='bihang_wpe_api_key' value='$apiKey' /></td>
   </tr>
   <tr>
     <td>API Secret</td>
-    <td><input type='text' name='oklink_wpe_api_secret' value='[REDACTED]' autocomplete='off'/></td>
+    <td><input type='text' name='bihang_wpe_api_secret' value='[REDACTED]' autocomplete='off'/></td>
   </tr>";
 
   return $content;
 }
 
-// Validate and submit form fields from oklink_wpe_form
-function submit_oklink_wpsc() {
-  if ($_POST['oklink_wpe_api_secret'] != null && $_POST['oklink_wpe_api_secret'] != '[REDACTED]') {
-    update_option("oklink_wpe_api_key", $_POST['oklink_wpe_api_key']);
-    update_option("oklink_wpe_api_secret", $_POST['oklink_wpe_api_secret']);
+// Validate and submit form fields from bihang_wpe_form
+function submit_bihang_wpsc() {
+  if ($_POST['bihang_wpe_api_secret'] != null && $_POST['bihang_wpe_api_secret'] != '[REDACTED]') {
+    update_option("bihang_wpe_api_key", $_POST['bihang_wpe_api_key']);
+    update_option("bihang_wpe_api_secret", $_POST['bihang_wpe_api_secret']);
   }
 
   return true;
 }
 
 
-// Handle redirect back from oklink
-function _wpsc_oklink_return() {
+// Handle redirect back from bihang
+function _wpsc_bihang_return() {
 
-  if ( !isset( $_REQUEST['wpsc_oklink_return'] ) ) {
+  if ( !isset( $_REQUEST['wpsc_bihang_return'] ) ) {
     return;
   }
 
-  // oklink order param interferes with wordpress
+  // bihang order param interferes with wordpress
   unset($_REQUEST['order']);
   unset($_GET['order']);
 
@@ -221,4 +221,4 @@ function _wpsc_oklink_return() {
 
 }
 
-add_action( 'init', '_wpsc_oklink_return' );
+add_action( 'init', '_wpsc_bihang_return' );
